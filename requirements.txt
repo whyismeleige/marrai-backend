@@ -11,6 +11,7 @@ httpx==0.28.1
 idna==3.18
 lxml==6.1.1
 pydantic==2.13.4
+pydantic-settings==2.14.1
 pydantic_core==2.46.4
 python-dotenv==1.2.2
 soupsieve==2.8.4
