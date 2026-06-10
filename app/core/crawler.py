@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 
 from app.logger import get_logger
 from app.config import get_settings
+from app.core.utils import normalize_url
 
 settings = get_settings()
 logger = get_logger(__name__) 
@@ -33,28 +34,6 @@ class Crawler:
         self.robot_parser = RobotFileParser()
         
         self._semaphore = asyncio.Semaphore(3)
-        
-    def _normalize_url(self, url: str, base_url: str) -> str | None:
-        try:
-            joined_url = urljoin(base_url, url)
-            
-            parsed = urlparse(joined_url)
-            
-            if parsed.scheme not in ("http", "https"):
-                return None
-            
-            if parsed.netloc != self.domain:
-                return None
-            
-            parsed = parsed._replace(fragment="", query="")
-            
-            unparsed_url = urlunparse(parsed)
-            
-            return unparsed_url.lower().rstrip("/")
-        except Exception as e:
-            logger.debug(f"Failed to Normalize URL {url}: {e}")
-            return None
-        
         
     async def _load_robots(self):
         try:
@@ -112,7 +91,7 @@ class Crawler:
         links = []
         
         for tag in tags:
-            link = self._normalize_url(tag["href"], base_url)
+            link = normalize_url(tag["href"], base_url)
             
             if link is not None: 
                 links.append(link)
@@ -122,7 +101,7 @@ class Crawler:
     async def crawl(self) -> list[CrawlResult]:
         await self._load_robots()
         
-        normalized_url = self._normalize_url(self.seed_url, "")
+        normalized_url = normalize_url(self.seed_url, "")
         
         if not normalized_url:
             return self.results
