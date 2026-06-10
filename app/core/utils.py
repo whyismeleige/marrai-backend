@@ -6,14 +6,14 @@ def normalize_url(url: str, base_url: str) -> str | None:
         
         url_parsed = urlparse(joined_url)
         base_url_parsed = urlparse(base_url)
-        
+         
         if url_parsed.scheme not in ("http", "https"):
             return None
         
-        if url_parsed.netloc != base_url_parsed.netloc:
+        if url_parsed.hostname != base_url_parsed.hostname:
             return None
-        
-        url_parsed = url_parsed._replace(fragment="", query="")
+         
+        url_parsed = url_parsed._replace(fragment="", query="", netloc=url_parsed.hostname)
         
         unparsed_url = urlunparse(url_parsed)
         
