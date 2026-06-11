@@ -1,4 +1,6 @@
+import json
 from dataclasses import dataclass, field
+from typing import Any
 
 from bs4 import BeautifulSoup
 
@@ -12,7 +14,6 @@ logger = get_logger(__name__)
 
 EXCLUDE_TAGS = ["script", "style", "nav", "footer", "header", "link", "noscript", "g", "menu", "button", "svg", "canvas"]
 EXCLUDE_CLASSES = ["ad", "ads", "advertisements", "banner", "promo", "sponsored"]
-
 
 @dataclass
 class FAQItem:
@@ -89,14 +90,65 @@ def _extract_internal_links(soup: BeautifulSoup, base_url: str) -> list[str]:
             
     return links
 
+def _extract_schema_types(node: Any) -> list[str]:
+    types = []
+    
+    if isinstance(node, list):
+        for item in node: 
+            types.extend(_extract_schema_types(item))
+    elif isinstance(node, dict):
+        for key, value in node.items():
+            if key == "@type":
+                if isinstance(value, str):
+                    types.append(value)
+                elif isinstance(value, list):
+                    for type_str in value:
+                        if isinstance(type_str, str):
+                            types.append(type_str)
+            elif isinstance(value, (dict, list)):
+                types.extend(_extract_schema_types(value))
+    
+    return types
+                        
+
+def _extract_schema(soup: BeautifulSoup) -> tuple[list[str], list[str]]:
+    tags = soup.find_all("script", {"type": "application/ld+json"})
+    
+    schema_data = []
+    
+    schema_types = []
+    
+    for tag in tags:
+        try:
+            text = tag.get_text()
+            data = json.loads(text) 
+
+            schema_types.extend(_extract_schema_types(data))    
+            schema_data.append(text)
+        except Exception as e:
+            continue    
+        
+    return (schema_data, list(set(schema_types)))
+
+def _extract_images_without_alt(soup: BeautifulSoup) -> int:
+    images_without_alt = [ 
+        img for img in soup.find_all("img")
+        if not img.has_attr("alt") or not img["alt"].strip()
+    ]
+    return len(images_without_alt)
+
 def parse(result: CrawlResult) -> ParsedPage:
     soup = BeautifulSoup(result.html, "lxml")
     
     body_text = _extract_body_text(soup)
     
+    json_ld_schema, schema_types = _extract_schema(soup)
+    
     return ParsedPage(
         url=result.url,
         status_code=result.status_code,
+        has_schema= bool(json_ld_schema),
+        images_without_alt= _extract_images_without_alt(soup),
         word_count=_extract_word_count(body_text),
         title= _extract_title(soup),
         meta_description= _extract_meta_description(soup),
@@ -104,5 +156,8 @@ def parse(result: CrawlResult) -> ParsedPage:
         canonical_url= _extract_canonical_url(soup),
         body_text_content= body_text,
         headings= _extract_headers(soup),
-        internal_links= _extract_internal_links(soup, result.url)
+        internal_links= _extract_internal_links(soup, result.url),
+        json_ld_schema= json_ld_schema,
+        schema_types= schema_types,
+         
     )
