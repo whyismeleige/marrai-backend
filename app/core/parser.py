@@ -111,12 +111,14 @@ def _extract_schema_types(node: Any) -> list[str]:
     return types
                         
 
-def _extract_schema(soup: BeautifulSoup) -> tuple[list[str], list[str]]:
+def _extract_schema(soup: BeautifulSoup) -> tuple[list[str], list[str], list[Any]]:
     tags = soup.find_all("script", {"type": "application/ld+json"})
     
     schema_data = []
     
     schema_types = []
+    
+    json_data = []
     
     for tag in tags:
         try:
@@ -125,10 +127,11 @@ def _extract_schema(soup: BeautifulSoup) -> tuple[list[str], list[str]]:
 
             schema_types.extend(_extract_schema_types(data))    
             schema_data.append(text)
+            json_data.append(data)
         except Exception as e:
             continue    
         
-    return (schema_data, list(set(schema_types)))
+    return (schema_data, list(set(schema_types)), json_data)
 
 def _extract_images_without_alt(soup: BeautifulSoup) -> int:
     images_without_alt = [ 
@@ -137,12 +140,63 @@ def _extract_images_without_alt(soup: BeautifulSoup) -> int:
     ]
     return len(images_without_alt)
 
+def _build_faq_items(node: Any) -> list[FAQItem]:
+    faq_items = []
+    
+    if isinstance(node, list):
+        for item in node:
+            faq_items.extend(_build_faq_items(item))
+    elif isinstance(node, dict):
+        if node.get("name") and (node.get("acceptedAnswer") or node.get("text")):
+            question = node.get("name")
+            answer_parts = []
+            
+            if node.get("acceptedAnswer"):
+                accepted_answer = node.get("acceptedAnswer")
+                
+                if isinstance(accepted_answer, list):
+                    for item in accepted_answer:
+                        if item.get("text"):
+                            answer_parts.append(item.get("text"))
+                                
+                elif isinstance(accepted_answer, dict):
+                    if accepted_answer.get("text"):
+                        answer_parts.append(accepted_answer.get("text"))
+                    
+                elif isinstance(accepted_answer, str):
+                    answer_parts.append(accepted_answer)
+            
+            if node.get("text"):
+                answer_parts.append(node.get("text"))
+                
+            answer = " ".join(answer_parts)
+            
+            faq_items.append(FAQItem(question, answer))
+    
+    return faq_items    
+
+def _extract_faq_items(node: Any) -> list[FAQItem]:
+    faq_items = []
+    
+    if isinstance(node, list):
+        for item in node:
+            faq_items.extend(_extract_faq_items(item))
+    elif isinstance(node, dict):
+        for key, value in node.items():
+            if key == "@type" and (value == "FAQPage" or (isinstance(value, list) and "FAQPage" in value)):
+                faq_items.extend(_build_faq_items(node.get("mainEntity")))
+            elif isinstance(value, (dict, list)):
+                faq_items.extend(_extract_faq_items(value))
+    
+    return faq_items
+
+
 def parse(result: CrawlResult) -> ParsedPage:
     soup = BeautifulSoup(result.html, "lxml")
     
     body_text = _extract_body_text(soup)
     
-    json_ld_schema, schema_types = _extract_schema(soup)
+    json_ld_schema, schema_types, json_data = _extract_schema(soup)
     
     return ParsedPage(
         url=result.url,
@@ -159,5 +213,5 @@ def parse(result: CrawlResult) -> ParsedPage:
         internal_links= _extract_internal_links(soup, result.url),
         json_ld_schema= json_ld_schema,
         schema_types= schema_types,
-         
+        faq_items= _extract_faq_items(json_data) 
     )
