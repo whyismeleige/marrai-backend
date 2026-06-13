@@ -1,5 +1,10 @@
 import pytest
-from app.core.scorer import _score_title, _score_meta_description, _score_canonical_url
+from app.core.scorer import (
+    _score_title,
+    _score_meta_description,
+    _score_canonical_url,
+    _score_meta_robots,
+)
 
 
 @pytest.mark.parametrize(
@@ -119,3 +124,56 @@ def test_score_canonical_url(canonical_url, expected):
     result = _score_canonical_url(canonical_url)
     assert result == expected
 
+
+@pytest.mark.parametrize(
+    "meta_robots, expected",
+    [
+        (
+            None,
+            (
+                12,
+                ["Meta robots not explicitly optimized"],
+                ["Consider setting to index, follow"],
+            ),
+        ),
+        (
+            "INDEX, FOLLOW",
+            (20, ["Meta robots fully permits indexing and following"], []),
+        ),
+        (
+            "none",
+            (
+                0,
+                ["Meta robots heavily restricts AI/crawler access"],
+                ["Remove restrictive directives like noindex/nofollow"],
+            ),
+        ),
+        (
+            "noindex",
+            (
+                2,
+                ["Meta robots contains restrictive directives"],
+                ["Review and remove unneccessary restrictions"],
+            ),
+        ),
+        (
+            "all, none",
+            (
+                12,
+                ["Meta robots not explicitly optimized"],
+                ["Consider setting to index, follow"],
+            ),
+        ),
+        (
+            "max-snippet:-1",
+            (
+                12,
+                ["Meta robots not explicitly optimized"],
+                ["Consider setting to index, follow"],
+            ),
+        ),
+    ],
+)
+def test_score_meta_robots(meta_robots, expected):
+    result = _score_meta_robots(meta_robots)
+    assert result == expected
