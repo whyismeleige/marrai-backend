@@ -1,4 +1,7 @@
 from fastapi import APIRouter
+
+from app.core.reporter import generate_report
+from app.core.orchestrator import orchestrate
 from app.models.schemas import AuditRequest, AuditResponse
 from app.logger import get_logger
 
@@ -9,11 +12,11 @@ router = APIRouter()
 async def run_audit(request: AuditRequest) -> AuditResponse:
     logger.info(f"Audit requested for URL: {request.url}")
     
-    return AuditResponse(
-        url=str(request.url),
-        pages_crawled=0,
-        overall_score=0.0,
-        findings=["Audit pipeline not yet implemented"],
-        recommendations=["Come back soon"],
-        crawl_duration_seconds=0.0,
-    )
+    seed_url = str(request.url)
+    
+    result = await orchestrate(seed_url)
+    
+    logger.info(f"Crawled {len(result.pages_crawled)} pages")
+    
+    logger.info(f"Audit Complete - site score: {result.site_score}")    
+    return generate_report(result)
