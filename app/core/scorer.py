@@ -196,6 +196,7 @@ def _score_metadata(page: ParsedPage) -> CategoryScore:
         recommendations=recommendations,
     )
 
+
 def _score_word_count(word_count: int) -> tuple[int, list[str], list[str]]:
     upper_limit = 2500
     lower_limit = 800
@@ -225,23 +226,28 @@ def _score_word_count(word_count: int) -> tuple[int, list[str], list[str]]:
             ],
         )
 
+
 def _score_headings(headings: list[dict[str, str]]) -> tuple[int, list[str], list[str]]:
     tags = [list(h.keys())[0] for h in headings]
-    
+
     texts = [list(h.values())[0] for h in headings]
-    
+
     h1_count = tags.count("h1")
-    
+
     tag_set = set(tags)
-    
+
     heading_word_counts = [len(t.split()) for t in texts]
-    
-    average_heading_word_count = sum(heading_word_counts) / len(heading_word_counts) if heading_word_counts else 0
-    
+
+    average_heading_word_count = (
+        sum(heading_word_counts) / len(heading_word_counts)
+        if heading_word_counts
+        else 0
+    )
+
     total_score = 0
     findings = []
     recommendations = []
-    
+
     if h1_count == 1:
         total_score += 10
         findings.extend(["Page has a single well-defined H1 heading"])
@@ -249,11 +255,15 @@ def _score_headings(headings: list[dict[str, str]]) -> tuple[int, list[str], lis
     elif h1_count > 1:
         total_score += 5
         findings.extend(["Page has multiple H1 headings"])
-        recommendations.extend(["Use only one H1 heading per page for clear topic signaling"])
+        recommendations.extend(
+            ["Use only one H1 heading per page for clear topic signaling"]
+        )
     else:
         findings.extend(["Page has no H1 heading"])
-        recommendations.extend(["Add a single descriptive H1 heading to define the page topic"])
-    
+        recommendations.extend(
+            ["Add a single descriptive H1 heading to define the page topic"]
+        )
+
     if len(headings) >= 3:
         total_score += 10
         findings.extend(["Page has sufficient heading structure"])
@@ -261,11 +271,15 @@ def _score_headings(headings: list[dict[str, str]]) -> tuple[int, list[str], lis
     elif 0 < len(headings) <= 2:
         total_score += 5
         findings.extend(["Page has minimal heading structure"])
-        recommendations.extend(["Add more headings to break content into scannable sections"])
+        recommendations.extend(
+            ["Add more headings to break content into scannable sections"]
+        )
     else:
         findings.extend(["Page has no headings"])
-        recommendations.extend(["Add headings (H1-H3) to structure your content for AI retrieval"])
-    
+        recommendations.extend(
+            ["Add headings (H1-H3) to structure your content for AI retrieval"]
+        )
+
     if "h1" in tag_set and "h2" in tag_set:
         total_score += 10
         findings.extend(["Page has adequate heading hierarchy"])
@@ -273,11 +287,15 @@ def _score_headings(headings: list[dict[str, str]]) -> tuple[int, list[str], lis
     elif "h1" in tag_set:
         total_score += 5
         findings.extend(["Page lacks H2 hierarchy"])
-        recommendations.extend(["Add H2 headings to create content sections for better chunking"])
-    else: 
+        recommendations.extend(
+            ["Add H2 headings to create content sections for better chunking"]
+        )
+    else:
         findings.extend(["Page has no heading hierarchy"])
-        recommendations.extend(["Add H1 and H2 headings to establish content structure"])
-    
+        recommendations.extend(
+            ["Add H1 and H2 headings to establish content structure"]
+        )
+
     if 5 <= average_heading_word_count <= 10:
         total_score += 10
         findings.extend(["Headings are well-defined and descriptive"])
@@ -289,8 +307,40 @@ def _score_headings(headings: list[dict[str, str]]) -> tuple[int, list[str], lis
     else:
         findings.extend(["Headings are too long or empty"])
         recommendations.extend(["Keep headings concise and focused (5-10 words)"])
-        
+
     return (total_score, findings, recommendations)
-        
-    
-    
+
+
+def _score_body_content(body_text: str | None) -> tuple[int, list[str], list[str]]:
+    if not body_text:
+        return (
+            0,
+            ["There is no content available on your website"],
+            [
+                "You need to write content on your website",
+                "Without meaningful content you won't be placed in AI visibility",
+            ],
+        )
+
+    words = body_text.split()
+    ratio = len(set(words)) / len(words) if words else 0  # Unique word ratio
+
+    max_score = 40
+
+    if ratio > 0.7:
+        return (max_score, ["Content is rich and diverse, ideal for AI retrieval"], [])
+    elif 0.4 <= ratio <= 0.7:
+        return (
+            round(max_score * ratio),
+            ["Content has moderate vocabulary diversity"],
+            ["Enrich your content with more varied vocabulary and topics"],
+        )
+    else:
+        return (
+            round(max_score * ratio),
+            ["Content is thin or repetitive"],
+            [
+                "Rewrite content to be more substantive",
+                "Avoid keyword stuffing and repetitive phrases",
+            ],
+        )
