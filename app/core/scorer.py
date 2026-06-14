@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.core.parser import ParsedPage
+from app.core.parser import ParsedPage, FAQItem
 
 
 @dataclass
@@ -349,7 +349,9 @@ def _score_body_content(body_text: str | None) -> tuple[int, list[str], list[str
 def _score_content_quality(page: ParsedPage) -> CategoryScore:
     count_score, count_findings, count_recs = _score_word_count(page.word_count)
     head_score, head_findings, head_recs = _score_headings(page.headings)
-    content_score, content_findings, content_recs = _score_body_content(page.body_text_content)
+    content_score, content_findings, content_recs = _score_body_content(
+        page.body_text_content
+    )
 
     findings = []
     findings.extend(count_findings)
@@ -374,3 +376,102 @@ def _score_content_quality(page: ParsedPage) -> CategoryScore:
         findings=findings,
         recommendations=recommendations,
     )
+
+
+def _score_has_schema(has_schema: bool) -> tuple[int, list[str], list[str]]:
+    if has_schema:
+        return (20, ["Page has structured schema markup"], [])
+    else:
+        return (
+            0,
+            ["No structured schema markup found"],
+            ["Add JSON-LD schema markup to your pages"],
+        )
+
+
+def _score_schema_types(schema_types: list[str]) -> tuple[int, list[str], list[str]]:
+    POINTS = {
+        "Product": 5,
+        "Organization": 5,
+        "Article": 4,
+        "BreadcrumbList": 4,
+        "LocalBusiness": 4,
+        "Person": 4,
+        "WebPage": 3,
+        "Event": 3,
+        "Review": 3,
+    }
+
+    total_score = 0
+
+    for schema_type in schema_types:
+        total_score += POINTS.get(schema_type, 0)
+
+    total_score = min(total_score, 30)
+
+    if total_score == 0:
+        return (
+            total_score,
+            ["No recognized schema types found"],
+            ["Add high-value schema types like Article, Organization, or Product"],
+        )
+    elif 0 < total_score <= 10:
+        return (
+            total_score,
+            ["Basic schema types present"],
+            ["Add more specific schema types to improve AI visibility"],
+        )
+    elif 10 < total_score <= 25:
+        return (total_score, ["Good schema type coverage"], [])
+    else:
+        return (total_score, ["Excellent schema type coverage"], [])
+
+
+def _score_faq_items(faq_items: list[FAQItem]) -> tuple[int, list[str], list[str]]:
+    faq_count = len(faq_items)
+
+    answer_word_counts = [len(item.answer.split()) for item in faq_items]
+
+    average_answer_word_count = (
+        sum(answer_word_counts) / len(answer_word_counts) if answer_word_counts else 0
+    )
+
+    total_score = 0
+    findings = []
+    recommendations = []
+
+    if not faq_count:
+        return (
+            0,
+            ["No FAQ schema found"],
+            ["Add FAQPage schema to answer common questions directly"],
+        )
+    else:
+        total_score += 10
+
+    if 0 < faq_count <= 5:
+        total_score += round((faq_count / 5) * 20)
+        findings.extend(["Limited FAQ coverage"])
+        recommendations.extend(["Add more FAQ items to improve answer coverage"])
+    elif 5 < faq_count <= 10:
+        total_score += 20
+        findings.extend(["Good FAQ Coverage"])
+        recommendations.extend([])
+    else:
+        total_score += max(20 - (faq_count - 10) * 2, 7)
+        findings.extend(["Excessive FAQ items"])
+        recommendations.extend(["Keep FAQ items focused and under 10 for best results"])
+
+    if average_answer_word_count < 10:
+        findings.extend(["FAQ answers are too brief"])
+        recommendations.extend(["Expand FAQ answers to at least 10 words for AI citability"])
+    elif 10 <= average_answer_word_count <= 50:
+        total_score += round((average_answer_word_count / 50) * 20)
+        findings.extend(["FAQ answers are well-structured"])
+        recommendations.extend([])
+    else:
+        total_score += 10
+        findings.extend(["FAQ answers are too long"])
+        recommendations.extend(["Keep FAQ answers concise (10-50 words) for better AI extraction"])
+
+    return (total_score, findings, recommendations)
