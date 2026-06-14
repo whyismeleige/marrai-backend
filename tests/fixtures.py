@@ -1,5 +1,5 @@
 from app.core.orchestrator import OrchestrationResult
-from app.core.scorer import ScoreResult, CategoryScore
+from app.core.scorer import ScoreResult, CategoryScore, UnreachablePage
 
 fake_category = CategoryScore(
     score=80,
@@ -28,4 +28,30 @@ fake_result = OrchestrationResult(
     crawl_duration_seconds=1.5,
     findings=["Good content"],
     recommendations=["Add schema"],
+)
+
+fake_empty_result = OrchestrationResult(
+    url="https://example.com",
+    site_score=0,
+    pages=[],
+    unreachable_pages=[],
+    pages_crawled=0,
+    crawl_duration_seconds=1.0,
+    findings=[],
+    recommendations=[],
+)
+
+fake_blocked_result = OrchestrationResult(
+    url="https://example.com",
+    site_score=0,
+    pages=[],
+    unreachable_pages=[
+        UnreachablePage(
+            url="https://example.com", status_code=403, reason="Forbidden Page"
+        )
+    ],
+    pages_crawled=1,
+    crawl_duration_seconds=1.0,
+    findings=[],
+    recommendations=[],
 )
