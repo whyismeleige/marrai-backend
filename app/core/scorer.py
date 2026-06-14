@@ -584,7 +584,7 @@ def _score_internal_links(
         score = round((count / 20) * 100)
         return (score, ["Page has good internal link coverage"], [])
     else:
-        score = round(100 - (count - 20) * 2, 50)
+        score = max(round(100 - (count - 20) * 2), 50)
         return (
             score,
             ["Page has excessive internal links"],
