@@ -34,13 +34,13 @@ jobs_table = Table(
     Column("status", Enum(JobStatus), nullable=False, default=JobStatus.PENDING),
     Column("result", JSONB, nullable=True),
     Column("error_message", String(2048), nullable=True),
-    Column("created_at", DateTime, server_default=func.now(), nullable=False),
+    Column("created_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
     Column(
         "updated_at",
-        DateTime,
+        DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
     ),
-    Column("completed_at", DateTime, nullable=True),
+    Column("completed_at", DateTime(timezone=True), nullable=True),
 )
