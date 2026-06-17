@@ -11,7 +11,7 @@ from app.core.scorer import score_page, ScoreResult, UnreachablePage
 @dataclass
 class OrchestrationResult:
     url: str
-    site_score: int
+    overall_score: int
     pages: list[ScoreResult]
     unreachable_pages: list[UnreachablePage]
     pages_crawled: int
@@ -75,7 +75,7 @@ async def orchestrate(seed_url: str, on_status_change: Callable[[str], Awaitable
 
     return OrchestrationResult(
         url=seed_url,
-        site_score=site_score,
+        overall_score=site_score,
         crawl_duration_seconds=crawl_duration_seconds,
         pages=scored_pages,
         pages_crawled=len(crawl_results),
