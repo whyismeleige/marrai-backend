@@ -6,3 +6,5 @@ __pycache__/
 logs/
 .DS_Store
 .pytest_cache/
+.env.docker
+
