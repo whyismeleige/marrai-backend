@@ -114,8 +114,10 @@ def score_semantic(page_scores: list[PageSemanticScore]) -> SemanticScoreResult:
     all_recommendations = []
 
     for page in page_scores:
-        all_findings.append(page.finding)
-        all_recommendations.append(page.recommendation)
+        if page.finding:
+            all_findings.append(page.finding)
+        if page.recommendation:
+            all_recommendations.append(page.recommendation)
 
     top_findings = [finding for finding, _ in Counter(all_findings).most_common(5)]
     top_recommendations = [
