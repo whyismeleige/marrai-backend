@@ -19,7 +19,7 @@ services:
   worker:
     build: .
     container_name: celery-worker
-    command: celery -A app.worker.celery_app worker --loglevel=info
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=${WORKER_CONCURRENCY_LIMIT}
     env_file:
       - .env.docker
     depends_on:
