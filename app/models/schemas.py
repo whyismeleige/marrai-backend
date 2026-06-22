@@ -31,14 +31,31 @@ class UnreachablePageResponse(BaseModel):
     status_code: int
     reason: str
 
+class ChunkSemanticScoreResponse(BaseModel):
+    heading: str
+    section_position: int
+    alignment_score: int
+    finding: str | None
+    recommendation: str | None
+
+class PageSemanticScoreResponse(BaseModel):
+    url: str
+    overall_score: int
+    section_scores: list[ChunkSemanticScoreResponse]
+    finding: str | None
+    recommendation: str | None
 
 class AuditResponse(BaseModel):
     url: str
     pages_crawled: int
     overall_score: int
+    semantic_score: int
     findings: list[str]
     recommendations: list[str]
+    semantic_findings: list[str]
+    semantic_recommendations: list[str]
     pages: list[PageResponse]
+    semantic_pages: list[PageSemanticScoreResponse]
     unreachable_pages: list[UnreachablePageResponse]
     crawl_duration_seconds: float
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
