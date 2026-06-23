@@ -26,7 +26,7 @@ async def disconnect():
         logger.info("DB pool closed.")
 
 
-async def create_job(url: str) -> str:
+async def create_job(url: str, email: str) -> str:
     global db_pool
 
     if not db_pool:
@@ -35,8 +35,8 @@ async def create_job(url: str) -> str:
 
     async with db_pool.acquire() as conn:
         job_id = await conn.fetchval(
-            "INSERT INTO jobs (job_id, url, status) VALUES ($1, $2, $3) RETURNING job_id",
-            uuid.uuid4(), url, "PENDING"
+            "INSERT INTO jobs (job_id, url, email, status) VALUES ($1, $2, $3, $4) RETURNING job_id",
+            uuid.uuid4(), url, email, "PENDING"
         )
         return str(job_id)
 

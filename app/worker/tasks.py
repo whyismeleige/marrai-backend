@@ -43,11 +43,11 @@ async def _update_job_status(pool, job_id: str, status: str, **kwargs):
 
 
 @celery_app.task()
-def run_audit_task(job_id: str, url: str):
-    asyncio.run(_run_audit_async(job_id, url))
+def run_audit_task(job_id: str, url: str, email: str):
+    asyncio.run(_run_audit_async(job_id, url, email))
 
 
-async def _run_audit_async(job_id: str, url: str):
+async def _run_audit_async(job_id: str, url: str, email: str):
     pool = await asyncpg.create_pool(
         settings.DATABASE_URL,
         min_size=1,

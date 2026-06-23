@@ -21,10 +21,11 @@ async def run_audit(request: AuditRequest) -> JobCreatedResponse:
 
     try:
         seed_url = str(request.url)
+        email = str(request.email)
 
-        job_id = await create_job(seed_url)
+        job_id = await create_job(seed_url, email)
 
-        run_audit_task.delay(job_id, seed_url)
+        run_audit_task.delay(job_id, seed_url, email)
 
         return JobCreatedResponse(job_id=job_id)
 
