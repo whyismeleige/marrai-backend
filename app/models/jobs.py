@@ -2,6 +2,7 @@ import enum
 import uuid
 
 from sqlalchemy import (
+    VARCHAR,
     Table,
     Column,
     UUID,
@@ -30,6 +31,7 @@ jobs_table = Table(
     metadata,
     Column("job_id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
     Column("url", String(2048), nullable=False),
+    Column("email", VARCHAR(255), nullable=True),
     Column("status", Enum(JobStatus), nullable=False, default=JobStatus.PENDING),
     Column("result", JSONB, nullable=True),
     Column("error_message", String(2048), nullable=True),
