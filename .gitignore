@@ -7,4 +7,4 @@ logs/
 .DS_Store
 .pytest_cache/
 .env.docker
-
+.env.production
