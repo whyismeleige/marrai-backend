@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.dependecies import rate_limit_check
+from app.api.dependencies import rate_limit_check
 from app.database import create_job, get_job
 from app.worker.tasks import run_audit_task
 from app.core.reporter import generate_report
