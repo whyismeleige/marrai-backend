@@ -8,6 +8,7 @@ import asyncpg
 from app.config import get_settings
 from app.logger import get_logger
 from app.core.orchestrator import orchestrate
+from app.services.emailer import send_audit_complete_mail
 from app.worker.celery_app import app as celery_app
 
 logger = get_logger(__name__)
@@ -73,7 +74,7 @@ async def _run_audit_async(job_id: str, url: str, email: str):
 
         logger.info(f"{url} task completed")
 
-        return await _update_job_status(
+        await _update_job_status(
             pool,
             job_id,
             "SUCCESS",
@@ -81,6 +82,15 @@ async def _run_audit_async(job_id: str, url: str, email: str):
             result=json.dumps(asdict(result)),
             completed_at=datetime.now(timezone.utc),
         )
+
+        email_response = send_audit_complete_mail(
+            to_email=email,
+            job_id=job_id,
+            result=result
+        )
+
+        if email_response is None:
+            logger.warning("Audit completed but email failed for job_id=%s", job_id)
     except Exception as e:
         logger.error(f"Unexpected error during audit: {e}")
         try:
