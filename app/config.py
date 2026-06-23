@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     )
     
     RESEND_API_KEY: str
+    RESEND_FROM_EMAIL: str
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
     CRAWL_LIMIT: int = 20

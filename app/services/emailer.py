@@ -165,7 +165,7 @@ def send_audit_complete_mail(
 
         return resend.Emails.send(
             {
-                "from": "Marrai <onboarding@resend.dev>",
+                "from": f"Marrai <{settings.RESEND_FROM_EMAIL}>",
                 "to": [to_email],
                 "subject": "Your AEO audit is complete",
                 "html": html_body,
