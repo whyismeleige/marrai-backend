@@ -20,3 +20,4 @@ from app.models import run_batches
 from app.models import prompt_runs
 from app.models import ai_observations
 from app.models import extraction_results
+from app.models import citations
