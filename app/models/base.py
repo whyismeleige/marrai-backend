@@ -12,3 +12,4 @@ from app.models import brand_projects
 from app.models import project_domains
 from app.models import competitors
 from app.models import competitor_domains
+from app.models import prompt_sets
