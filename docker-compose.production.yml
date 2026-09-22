@@ -1,27 +1,45 @@
+name: marrai-backend-prod
+
+# Example production topology. PostgreSQL, Redis, and the container image are
+# expected to be provided outside this file (managed hosting such as Railway,
+# Render, Fly.io, Neon, Upstash, etc.), so this compose file only wires the
+# two runtime containers: one API and one Celery worker from the SAME image.
+#
+# Usage:
+#   cp .env.example .env.production   # fill in production values
+#   export BACKEND_IMAGE=marrai-backend:latest   # or push your own registry image
+#   docker compose -f docker-compose.production.yml up -d
+
 services:
   api:
-    image: piyushjain31/aeo-audit-tool:latest
-    container_name: fastapi
+    image: ${BACKEND_IMAGE:-marrai-backend:latest}
+    container_name: marrai-api
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+    env_file:
+      - .env.production
+    environment:
+      PORT: ${PORT:-8000}
     ports:
       - "127.0.0.1:8000:8000"
-    env_file:
-      - .env.production
     depends_on:
       redis:
         condition: service_started
-    volumes:
-      - ./logs:/app/logs
+    restart: unless-stopped
 
   worker:
-    image: piyushjain31/aeo-audit-tool:latest
-    container_name: celery-worker
-    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=${WORKER_CONCURRENCY_LIMIT:-1}
+    image: ${BACKEND_IMAGE:-marrai-backend:latest}
+    container_name: marrai-worker
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=${WORKER_CONCURRENCY_LIMIT:-2}
     env_file:
       - .env.production
     depends_on:
       redis:
         condition: service_started
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
-    container_name: redis
+    container_name: marrai-redis
+    restart: unless-stopped

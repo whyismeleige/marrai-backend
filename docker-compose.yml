@@ -1,11 +1,14 @@
+name: marrai-backend
+
 services:
   api:
     build: .
-    container_name: fastapi
+    image: marrai-backend:local
+    container_name: marrai-api
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
-      - .env.docker 
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
@@ -13,15 +16,15 @@ services:
         condition: service_started
       migrator:
         condition: service_completed_successfully
-    volumes:
-      - ./logs:/app/logs
+    restart: unless-stopped
 
   worker:
     build: .
-    container_name: celery-worker
-    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=${WORKER_CONCURRENCY_LIMIT}
+    image: marrai-backend:local
+    container_name: marrai-worker
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=${WORKER_CONCURRENCY_LIMIT:-2}
     env_file:
-      - .env.docker
+      - .env
     depends_on:
       redis:
         condition: service_started
@@ -29,41 +32,45 @@ services:
         condition: service_healthy
       migrator:
         condition: service_completed_successfully
-  
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
-    container_name: redis
+    container_name: marrai-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
+    restart: unless-stopped
 
   postgres:
     image: postgres:16
-    container_name: postgres
+    container_name: marrai-postgres
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-aeo_audit}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-aeo_audit}"]
       interval: 5s
       timeout: 5s
       retries: 5
-    env_file:
-      .env.docker
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-  
+      - marrai_postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   migrator:
     build: .
-    container_name: migrator
+    image: marrai-backend:local
+    container_name: marrai-migrator
     command: alembic upgrade head
     env_file:
-      - .env.docker
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
 
 volumes:
-  postgres_data:
+  marrai_postgres_data:
