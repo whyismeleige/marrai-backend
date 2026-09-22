@@ -1,5 +1,5 @@
+from collections import Counter
 from dataclasses import dataclass
-from typing import Counter
 
 import numpy
 
