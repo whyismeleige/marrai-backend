@@ -3,8 +3,8 @@ from typing import Any
 
 import resend
 
-from app.core.orchestrator import OrchestrationResult
 from app.config import get_settings
+from app.core.orchestrator import OrchestrationResult
 from app.logger import get_logger
 
 settings = get_settings()
@@ -30,11 +30,14 @@ def _render_list(title: str, items: list[str]) -> str:
             </section>
         """
 
-    list_items = "".join(f"""
+    list_items = "".join(
+        f"""
         <li style="margin-bottom: 10px; line-height: 1.5;">
             {_escape(item)}
         </li>
-        """ for item in items)
+        """
+        for item in items
+    )
 
     return f"""
         <section style="margin-top: 24px;">
@@ -47,7 +50,7 @@ def _render_list(title: str, items: list[str]) -> str:
 
 
 def _build_report_url(job_id: str) -> str:
-    base_url = "https://marrai.tech"
+    base_url = settings.FRONTEND_URL.rstrip("/")
     return f"{base_url}/audit/{job_id}"
 
 
@@ -159,10 +162,12 @@ def send_audit_complete_mail(
     job_id: str,
     result: OrchestrationResult,
 ) -> dict[str, Any] | None:
+    if not settings.email_enabled or not to_email:
+        logger.debug("Email disabled or missing address; skipping for job %s", job_id)
+        return None
 
     try:
         html_body = _build_audit_complete_html(job_id=job_id, result=result)
-
         return resend.Emails.send(
             {
                 "from": f"Marrai <{settings.RESEND_FROM_EMAIL}>",
@@ -171,7 +176,7 @@ def send_audit_complete_mail(
                 "html": html_body,
             }
         )
-
     except Exception:
-        logger.exception("Error sending audit completion email to %s", to_email)
+        # Never let email problems surface as audit failures.
+        logger.exception("Error sending audit completion email for job %s", job_id)
         return None
