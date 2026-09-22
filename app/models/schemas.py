@@ -1,12 +1,14 @@
 from datetime import datetime, timezone
-from pydantic import BaseModel, EmailStr, HttpUrl, Field
+
+from pydantic import BaseModel, EmailStr, Field, HttpUrl
 
 from app.models.jobs import JobStatus
 
 
 class AuditRequest(BaseModel):
     url: HttpUrl
-    email: EmailStr
+    # Optional: the free audit runs without any contact information.
+    email: EmailStr | None = None
 
 
 class CategoryScoreResponse(BaseModel):
@@ -32,6 +34,7 @@ class UnreachablePageResponse(BaseModel):
     status_code: int
     reason: str
 
+
 class ChunkSemanticScoreResponse(BaseModel):
     heading: str
     section_position: int
@@ -39,12 +42,14 @@ class ChunkSemanticScoreResponse(BaseModel):
     finding: str | None
     recommendation: str | None
 
+
 class PageSemanticScoreResponse(BaseModel):
     url: str
     overall_score: int
     section_scores: list[ChunkSemanticScoreResponse]
     finding: str | None
     recommendation: str | None
+
 
 class AuditResponse(BaseModel):
     url: str
@@ -63,6 +68,7 @@ class AuditResponse(BaseModel):
 
 
 class JobResponse(BaseModel):
+    # Note: intentionally excludes the submitted email address.
     job_id: str
     url: str
     status: JobStatus
