@@ -1,415 +1,186 @@
 # Marrai Backend
 
-Marrai Backend is the FastAPI service that powers Marrai’s AI visibility and Answer Engine Optimization (AEO) audit system.
+Marrai Backend is the FastAPI service behind Marrai's free Answer Engine Optimization (AEO) audit.
 
-It accepts a website URL, crawls pages from the same domain, extracts machine-readable signals, runs deterministic and semantic scoring, and returns a structured audit report for the frontend.
+It accepts a website URL, crawls pages from the same domain, extracts machine-readable signals, runs deterministic and semantic scoring, and returns a structured audit report that the frontend displays.
 
 ## What is Marrai?
 
-Marrai helps website owners understand whether AI answer engines can understand, retrieve, and cite their website.
-
-Traditional SEO focuses on search rankings. Marrai focuses on answer-engine readability: the signals that help AI systems parse, summarize, compare, and cite a website.
+Marrai helps website owners understand whether AI answer engines can understand, retrieve, and cite their website. Traditional SEO focuses on search engine rankings; Marrai focuses on answer-engine readability — the signals that help AI systems parse, summarize, compare, and cite a website.
 
 ## Features
 
-* FastAPI audit API
-* Async website crawling
-* Same-domain crawl control
-* Up to 20 pages crawled per audit
-* Static HTML extraction
-* Metadata extraction
-* Heading hierarchy extraction
-* Schema and structured data checks
-* Canonical URL checks
-* Internal link analysis
-* Content quality scoring
-* Technical compliance checks
-* Semantic alignment scoring with embeddings
-* Background job processing with Celery
-* Redis-backed worker queue
-* PostgreSQL persistence
-* Alembic database migrations
-* IP-based rate limiting
-* Email notification support
-* Docker Compose local development
-* GitHub Actions CI/CD-ready structure
+* FastAPI audit API (`/api/v1/audit`)
+* Async same-domain crawling (up to 20 pages per audit by default)
+* Static HTML, metadata, heading hierarchy, schema, canonical, and internal-link extraction
+* Deterministic scoring across AEO categories + embedding-based semantic alignment scoring
+* SSRF protection on every redirect hop (DNS classification, http/https only, port allow-list, no credentials)
+* Background job processing with Celery, Redis broker, PostgreSQL persistence, Alembic migrations
+* IP-based rate limiting (fail-open) with `429` + `Retry-After`
+* Proxy trust boundary: the Next.js frontend forwards `X-Client-IP` with `X-Proxy-Secret`; a missing secret is rejected with `403`
+* Optional completion email via Resend (never fails an audit)
+* Fail-soft boot: unavailability of PostgreSQL/Redis at startup degrades `/ready` instead of crashing the container
+* Docker + Docker Compose (development and production), fail-soft boot
 
-## Tech Stack
+## Architecture
 
-* Python
-* FastAPI
-* Uvicorn
-* PostgreSQL
-* asyncpg
-* SQLAlchemy Core
-* Alembic
-* Redis
-* Celery
-* httpx
-* BeautifulSoup4
-* Pydantic
-* pydantic-settings
-* sentence-transformers
-* scikit-learn
-* PyTorch CPU
-* Docker
-* Docker Compose
-* pytest
+```mermaid
+flowchart LR
+    subgraph Browser
+        U[User browser]
+    end
 
-## Project Structure
+    subgraph NextJS["marrai-web (Next.js)"]
+        P[/audit form/]
+        R[/audit results/]
+        A[api/audit route]
+        A2[api/audit jobId route]
+    end
 
-```txt
-marrai-backend/
-├── .github/
-│   └── workflows/
-├── alembic/
-├── app/
-│   ├── api/
-│   ├── core/
-│   ├── worker/
-│   ├── config.py
-│   └── logger.py
-├── tests/
-├── .env.example
-├── Dockerfile
-├── docker-compose.yml
-├── docker-compose.production.yml
-├── alembic.ini
-├── main.py
-├── requirements.txt
-└── README.md
+    subgraph Backend["marrai-backend (FastAPI)"]
+        API["POST /api/v1/audit"]
+        GET["GET /api/v1/audit/{job_id}"]
+        REDIS[(Redis<br/>broker + rate limit)]
+        Worker[Celery worker<br/>crawl / parse / score]
+        PG[(PostgreSQL<br/>jobs + reports)]
+        ML["sentence-transformers<br/>embeddings (CPU)"]
+    end
+
+    HTTP1["target site (public HTTP/S)"]
+
+    U -->|"submit URL + optional email"| P
+    P --> A -->|"POST + X-Client-IP + X-Proxy-Secret"| API
+    API --> REDIS --> Worker
+    Worker --> HTTP1
+    Worker --> ML
+    Worker --> PG
+    R --> A2 -->|"GET with proxy secret"| GET
+    GET --> PG
 ```
 
-## How the Audit Works
+## Scoring categories
 
-```txt
-1. User submits a website URL
-2. Backend creates an audit job
-3. Celery worker picks up the job
-4. Crawler discovers same-domain pages
-5. Parser extracts metadata, headings, schema, links, and content
-6. Deterministic scoring runs across AEO categories
-7. Semantic scoring evaluates heading-to-section alignment
-8. Final report is saved
-9. Frontend polls the job until success or failure
-```
+* **Metadata** — titles, meta descriptions, canonical URLs, robots signals
+* **Content quality** — headings, word count, body text, content structure
+* **Structured data** — schema presence/types, FAQ-style structured data
+* **Connectivity** — internal links and crawlability
+* **Technical compliance** — image alt text and machine-readable hygiene
+* **Semantic clarity** — embeddings compare headings with the content beneath them
 
-## Scoring Categories
+Overall and per-category scores are `0–100`, shared with the frontend score bands (`80` strong, `65` good, `40` needs improvement).
 
-Marrai currently evaluates:
+## API endpoints
 
-### Metadata
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Liveness (always 200 when the process is up) |
+| `GET` | `/ready` | Readiness (reports `database` / `redis` connectivity, does not crash when infra is down) |
+| `POST` | `/api/v1/audit` | Create an audit job |
+| `GET` | `/api/v1/audit/{job_id}` | Poll job status / fetch report |
 
-Checks title tags, meta descriptions, canonical URLs, and robots signals.
-
-### Content Quality
-
-Checks headings, word count, body text, and content structure.
-
-### Structured Data
-
-Checks schema presence, schema types, and FAQ-style structured data.
-
-### Connectivity
-
-Checks internal links and site crawlability.
-
-### Technical Compliance
-
-Checks image alt text and basic machine-readable hygiene.
-
-### Semantic Clarity
-
-Uses embeddings to compare headings with the content beneath them.
-
-## API Endpoints
-
-### Health Check
-
-```txt
-GET /health
-```
-
-Example:
-
-```bash
-curl http://localhost:8000/health
-```
-
-Example response:
-
-```json
-{
-  "status": "ok",
-  "env": "development"
-}
-```
-
-### Create Audit
-
-```txt
-POST /api/v1/audit
-```
-
-Request:
-
-```json
-{
-  "url": "https://example.com",
-  "email": "user@example.com"
-}
-```
-
-`email` may be optional depending on the frontend flow.
-
-Example:
+Job statuses: `pending`, `started`, `crawling`, `scoring`, `success`, `failure`.
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/audit" \
   -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://example.com",
-    "email": "user@example.com"
-  }'
+  -d '{"url": "https://example.com", "email": "user@example.com"}'
 ```
-
-Example response:
 
 ```json
-{
-  "job_id": "uuid-string",
-  "status": "pending"
-}
+{ "job_id": "uuid-string", "status": "pending" }
 ```
 
-### Get Audit Status / Report
+`email` is optional. `JobResponse` never echoes the email back.
 
-```txt
-GET /api/v1/audit/{job_id}
-```
-
-Example:
+## Local development (Docker)
 
 ```bash
-curl http://localhost:8000/api/v1/audit/<job_id>
-```
-
-Possible statuses:
-
-```txt
-pending
-started
-crawling
-scoring
-success
-failure
-```
-
-Successful report responses include:
-
-```txt
-job_id
-url
-status
-result
-error_message
-created_at
-updated_at
-completed_at
-```
-
-The `result` object contains:
-
-```txt
-overall_score
-semantic_score
-pages_crawled
-findings
-recommendations
-semantic_findings
-semantic_recommendations
-pages
-semantic_pages
-unreachable_pages
-crawl_duration_seconds
-created_at
-```
-
-## Local Development
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/whyismeleige/marrai-backend.git
-cd marrai-backend
-```
-
-### 2. Create environment file
-
-```bash
-cp .env.example .env.docker
-```
-
-Example local values:
-
-```env
-APP_ENV=development
-LOG_LEVEL=INFO
-
-CRAWL_LIMIT=20
-CRAWL_TIMEOUT=10
-USER_AGENT=aeo-audit-bot/1.0
-
-DB_HOST=postgres
-DB_PORT=5432
-DB_NAME=aeo_audit
-DB_USER=postgres
-DB_PASSWORD=postgres
-
-REDIS_URL=redis://redis:6379/0
-
-EMBEDDING_MODEL=all-MiniLM-L6-v2
-WORKER_CONCURRENCY_LIMIT=2
-```
-
-### 3. Start services
-
-```bash
+cp .env.example .env
 docker compose up --build
 ```
 
-This starts:
-
-```txt
-FastAPI API server
-Celery worker
-PostgreSQL
-Redis
-Alembic migrator
-```
-
-The API should be available at:
-
-```txt
-http://localhost:8000
-```
-
-### 4. Check health
+This starts the API, Celery worker, PostgreSQL, Redis, and the Alembic migrator.
 
 ```bash
-curl http://localhost:8000/health
+curl http://127.0.0.1:8000/health
 ```
 
-## Running Without Docker
-
-Create and activate a virtual environment:
+Production-compose variant:
 
 ```bash
-python -m venv venv
-source venv/bin/activate
+cp .env.example .env.production
+# fill in real secrets, then:
+docker compose -f docker-compose.production.yml up -d --build
 ```
 
-Install dependencies:
+For local development leave `API_PROXY_SHARED_SECRET` empty. In production set it to `openssl rand -hex 32` and mirror it in the frontend's `API_PROXY_SHARED_SECRET`, otherwise API requests are rejected.
+
+## Running without Docker
 
 ```bash
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-```
-
-Run the server:
-
-```bash
 uvicorn main:app --reload
 ```
 
-This mode requires PostgreSQL and Redis to already be running and reachable from your environment variables.
+This mode needs PostgreSQL and Redis reachable at the configured URLs, plus `alembic upgrade head` run once.
 
-## Database Migrations
-
-Run migrations with Alembic:
+## Database migrations
 
 ```bash
-alembic upgrade head
-```
-
-Create a new migration:
-
-```bash
-alembic revision -m "describe change"
+alembic upgrade head      # apply
+alembic revision -m "…"   # new migration
 ```
 
 ## Testing
 
-Run tests:
-
 ```bash
 pytest -v
 ```
 
-## Environment Variables
+The suite covers the API, SSRF/security classification, crawler behavior, rate limiting, scoring, and report serialization. It uses a fake Redis and does not require infra.
 
-Common variables:
+## Environment variables
 
-```txt
-APP_ENV
-LOG_LEVEL
-CRAWL_LIMIT
-CRAWL_TIMEOUT
-USER_AGENT
-DB_HOST
-DB_PORT
-DB_NAME
-DB_USER
-DB_PASSWORD
-REDIS_URL
-EMBEDDING_MODEL
-WORKER_CONCURRENCY_LIMIT
-```
+See `.env.example` (documented inline). Highlights:
 
-Production deployments may also require email, CORS, domain, and deployment-specific secrets.
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` / `DB_*` | PostgreSQL connection |
+| `REDIS_URL` | Celery broker + rate limiting |
+| `FRONTEND_URL` | Public frontend origin (report links in emails, default CORS) |
+| `CORS_ORIGINS` | Extra CORS origins |
+| `API_PROXY_SHARED_SECRET` | Proxy trust secret (production) |
+| `RATE_LIMIT_WINDOW_SECONDS` / `RATE_LIMIT_MAX_REQUESTS` | Audit rate limit per IP `(3600s / 5)` |
+| `CRAWL_*`, `USER_AGENT` | Crawler behavior/timing |
+| `EMBEDDING_MODEL` | sentence-transformers model id |
+| `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | Optional completion email |
+| `APP_ENV` | `development` or `production`; production validates insecure defaults |
 
-## Frontend Connection
+## Frontend connection
 
-The frontend repository is:
+The frontend (`marrai-web`) calls the backend only through Next.js server routes that add `X-Client-IP` and `X-Proxy-Secret`. Browsers never talk to the backend directly.
 
-```txt
-https://github.com/whyismeleige/marrai-web
-```
+Expected local API URL: `http://localhost:8000` (browser-safe CORS origin: `http://localhost:3000`).
 
-The frontend calls the backend through Next.js proxy routes.
+## Manual deployment (no CI/CD)
 
-Expected production API URL:
-
-```txt
-https://api.marrai.tech
-```
-
-Expected local API URL:
-
-```txt
-http://localhost:8000
-```
-
-## Development Workflow
-
-Recommended branch flow:
-
-```txt
-main = stable deployable backend
-feature branches = individual backend changes
-```
-
-Example:
+This is a hobby project, so deployment is intentionally manual — one server box, one command per service.
 
 ```bash
-git checkout -b feat/improve-semantic-scoring
-pytest -v
-git add .
-git commit -m "feat(scoring): improve semantic alignment checks"
-git push origin feat/improve-semantic-scoring
+# 1. Build the local image once
+docker build -t marrai-backend:latest .
+
+# 2. Fill in real production secrets
+cp .env.example .env.production   # edit: DATABASE_URL, REDIS_URL, APP_ENV=production,
+                                  #       API_PROXY_SHARED_SECRET, FRONTEND_URL, RESEND_API_KEY
+
+# 3. Run the production topology (API + worker + Redis). Postgres is expected
+#    to be a hosted/managed instance referenced by DATABASE_URL.
+export BACKEND_IMAGE=marrai-backend:latest
+docker compose -f docker-compose.production.yml up -d
 ```
 
-Then open a pull request into `main`.
+Deploying the frontend is the same idea: `pnpm build` once, serve the output (e.g. `next start` behind a reverse proxy) with `BACKEND_API_URL`, `API_PROXY_SHARED_SECRET`, and `NEXT_PUBLIC_SITE_URL` set.
 
-## Notes
-
-This backend is part of the Marrai MVP. The current goal is to provide a reliable free AEO audit flow that can crawl a site, score it, and return a practical report for frontend users.
+On a fresh server, re-run the build steps and `docker compose up -d` after pulling the repo — that is the whole pipeline.
